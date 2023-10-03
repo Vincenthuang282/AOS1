@@ -231,25 +231,25 @@ uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 // Allocate PTEs and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 uint64
-uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
+uvmalloc(pagetable_t pagetable/*pagetable*/, uint64 oldsz/*old size of the address space*/, uint64 newsz/*new size of the address space*/, int xperm/*permissions */) 
 {
   char *mem;
   uint64 a;
 
-  if(newsz < oldsz)
+  if(newsz < oldsz) //This step ensures that we don't shrink the address space, and the function just returns the old size.
     return oldsz;
-  oldsz = PGROUNDUP(oldsz);
+  oldsz = PGROUNDUP(oldsz); //This is done because the memory should be allocated in page-sized increments.
 
   for(a = oldsz; a < newsz; a += PGSIZE){
-    mem = kalloc();
-    if(mem == 0){
+    mem = kalloc();// Allocate a page of memory using kalloc(). If kalloc() returns 0, 
+    if(mem == 0){   //indicating that there's no available memory, free the previously allocated memory and return 0 to indicate failure
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
-    memset(mem, 0, PGSIZE);
-    if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R|PTE_U|xperm) != 0){
-      kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
+    memset(mem, 0, PGSIZE); //Use memset to initialize the allocated page to zeros, ensuring that the memory is clean.
+    if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R|PTE_U|xperm) != 0){//Map the allocated memory page into the process's page table at address a with the specified permissions (PTE_R|PTE_U|xperm). 
+      kfree(mem);//If mappages() fails to map the memory, free the allocated memory and any previously allocated memory, then return 0 to indicate failure.
+      uvmdealloc(pagetable, a, oldsz);//
       return 0;
     }
   }
@@ -353,7 +353,7 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
-// CSE 536: mark a PTE invalid. For swapping 
+// CSE 536:  a PTE invalid. For swapping 
 // pages in and out of memory.
 void
 uvminvalid(pagetable_t pagetable, uint64 va)
@@ -375,8 +375,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   uint64 n, va0, pa0;
 
   while(len > 0){
-    va0 = PGROUNDDOWN(dstva);
+    va0 = PGROUNDDOWN(dstva); 
+    //printf("VA:%x\n",va0);
     pa0 = walkaddr(pagetable, va0);
+    //printf("PA:%x\n",pa0);
     if (pa0 == 0){
       return -1;
     }
@@ -402,7 +404,9 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
+    //printf("va0:%x\n",va0);
     pa0 = walkaddr(pagetable, va0);
+    //printf("pa0:%x\n",pa0);
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (srcva - va0);
@@ -459,3 +463,4 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+

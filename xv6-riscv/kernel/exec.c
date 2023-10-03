@@ -7,6 +7,7 @@
 #include "defs.h"
 #include "elf.h"
 
+
 // static 
 int loadseg(pde_t *, uint64, struct inode *, uint, uint);
 
@@ -20,6 +21,18 @@ int flags2perm(int flags)
     return perm;
 }
 
+bool if_ondemand(char *path)
+{ // sh && /init  is not on demanded
+  if (path[0]=='/' && path[1]=='i' && path[2]=='n' && path[3]=='i' && path[4]=='t'){
+    return false;
+  }
+  else if(path[0]=='s' && path[1]=='h' ){
+    return false;
+  }
+  else{
+    return true;
+  }
+} 
 int
 exec(char *path, char **argv)
 {
@@ -31,14 +44,19 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
+  
+  p->ondemand=if_ondemand(path);
+  
 
-  /* CSE 536: (2.1) Check on-demand status. */
+ 
+  /* CSE 536: (2.1) Check on-demand status. ------------------------------*/
   if (p->ondemand == true) {
     print_ondemand_proc(path);
   }
+  
+  begin_op(); 
 
-  begin_op();
-
+  
   if((ip = namei(path)) == 0){
     end_op();
     return -1;
@@ -54,34 +72,49 @@ exec(char *path, char **argv)
 
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
-
   // Load program into memory.
-  for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+  for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){ 
     if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
-    if(ph.type != ELF_PROG_LOAD)
+    if(ph.type != ELF_PROG_LOAD){
       continue;
-    if(ph.memsz < ph.filesz)
+      }
+    if(ph.memsz < ph.filesz) //This type typically represents segments of the program that need to be loaded into memory.
       goto bad;
-    if(ph.vaddr + ph.memsz < ph.vaddr)
+    if(ph.vaddr + ph.memsz < ph.vaddr)//It checks if the size of the segment in memory is greater than or equal to the size of the segment in the file
       goto bad;
-    if(ph.vaddr % PGSIZE != 0)
+    if(ph.vaddr % PGSIZE != 0) //This is important because segments must be page-aligned when loaded into memory.
       goto bad;
 
     uint64 sz1;
+
+  if(p->ondemand==false){
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
       goto bad;
     sz = sz1;
-    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
+    //printf("ph.vaddr:%x, ph.memsz%x, sz=%x\n",ph.vaddr,ph.memsz,sz);
+    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)       
       goto bad;
   }
+  else{
+    //printf("%x=uvmalloc(pagetable, %x, %x,%d)\n",sz1=uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags)),sz,ph.vaddr+ph.memsz,flags2perm(ph.flags));
+    //sz=sz1;
+    //printf("loadseg(%x, %x, %x, %x)\n",pagetable,ph.vaddr,ph.off,ph.filesz); 
+    //loadseg(pagetable,ph.vaddr,ip,ph.off,ph.filesz);
+    
+    
+    sz=ph.vaddr+ph.memsz;
+    print_skip_section(path,ph.vaddr,ph.memsz);
+  }
+  }
+  //printf("%x\n",sz);
   iunlockput(ip);
   end_op();
   ip = 0;
-
+  
   p = myproc();
-  uint64 oldsz = p->sz;
 
+  uint64 oldsz = p->sz;
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible as a stack guard.
   // Use the second as the user stack.
@@ -181,3 +214,4 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
   
   return 0;
 }
+

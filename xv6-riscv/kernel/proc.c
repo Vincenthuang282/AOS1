@@ -257,6 +257,7 @@ userinit(void)
 /* CSE 536: tracking each heap page allocated to the process. */
 void track_heap(struct proc* p, uint64 start, int npages) {
   for (int i = 0; i < MAXHEAP; i++) {
+    
     if (p->heap_tracker[i].addr == 0xFFFFFFFFFFFFFFFF) {
       p->heap_tracker[i].addr           = start + (i*PGSIZE);
       p->heap_tracker[i].loaded         = 0;   
@@ -274,25 +275,33 @@ void track_heap(struct proc* p, uint64 start, int npages) {
 int
 growproc(int n)
 {
+
   uint64 sz;
   struct proc *p = myproc();
-
+  
   /* CSE 536: (2.3) Instead of allocating pages, make these allocations
    * on-demand. Also, keep track of all allocated heap pages. 
    */
-
-  /* CSE 536: For simplicity, I've made all allocations at page-level. */
-  n = PGROUNDUP(n);
-
-  sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
-    }
-  } else if(n < 0){
-    sz = uvmdealloc(p->pagetable, sz, sz + n);
+  if(p->ondemand==1){
+    int pagenumber=n/PGSIZE;
+    track_heap(p,p->sz,pagenumber);
+    p->sz=p->sz+n;
+ 
   }
-  p->sz = sz;
+  else{
+  /* CSE 536: For simplicity, I've made all allocations at page-level. */
+    n = PGROUNDUP(n);
+
+    sz = p->sz;
+    if(n > 0){
+      if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
+        return -1;
+      }
+    } else if(n < 0){
+      sz = uvmdealloc(p->pagetable, sz, sz + n);
+    }
+    p->sz = sz;
+  }
   return 0;
 }
 
@@ -316,7 +325,8 @@ fork(int cow_enabled)
   // You will have to implement the same
 
   // Set the appropriate metadata to track a CoW group
-
+  np->cow_group=p->pid;
+  np->cow_enabled=cow_enabled;
   // implement and call the uvm_copy() function defined in cow.c
 
   // Copy user memory from parent to child.
@@ -720,3 +730,5 @@ procdump(void)
     printf("\n");
   }
 }
+
+

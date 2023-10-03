@@ -52,6 +52,7 @@ void decr_cow_group_count(int group) {
 }
 
 void add_shmem(int group, uint64 pa) {
+    printf("getin\n");
     if(group == -1)
         return;
 
@@ -68,6 +69,7 @@ void add_shmem(int group, uint64 pa) {
 }
 
 int is_shmem(int group, uint64 pa) {
+    printf("getin\n");
     if(group == -1)
         return 0;
 
@@ -91,23 +93,44 @@ void cow_init() {
     initlock(&cow_lock, "cow_lock");
 }
 
+void mark_pages_as_read_only(pagetable_t pagetable,uint64 sz){ ///what i add
+    for(int i=0; i<sz/PGSIZE; i++){
+        pte_t *pte=&pagetable[i];
+        if(*pte & PTE_V){
+            *pte &= ~PTE_W; 
+            *pte |= PTE_R;
+        }
+    }
+}
+
 int uvmcopy_cow(pagetable_t old, pagetable_t new, uint64 sz) {
     
     /* CSE 536: (2.6.1) Handling Copy-on-write fork() */
 
     // Copy user vitual memory from old(parent) to new(child) process
-
+    if(uvmcopy(old,new,sz)<0){
+        printf("Copy parent'pagetable to child's failed\n");
+    }
     // Map pages as Read-Only in both the processes
+    mark_pages_as_read_only(old,sz);
+    mark_pages_as_read_only(new,sz);
 
     return 0;
 }
 
-void copy_on_write() {
+void copy_on_write(struct proc *p, uint64 va) {
     /* CSE 536: (2.6.2) Handling Copy-on-write */
-
+    pte_t *pte;
+    pte=walk(p->pagetable,va,0);
+    uint64 pa=PTE2PA(*pte);
     // Allocate a new page 
-    
+    uint64 new_pa = kalloc();
+    if(new_pa==0)
+        return -1;
     // Copy contents from the shared page to the new page
-
+    memmove((void*)new_pa,(void*)pa,PGSIZE);
     // Map the new page in the faulting process's page table with write permissions
+    *pte = PA2PTE(new_pa) | PTE_W | PTE_U |PTE_X;
+    sfence_vma();
 }
+
