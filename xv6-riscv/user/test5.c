@@ -16,7 +16,7 @@ char stacks[PGSIZE*MAXULTHREADS];
 
 uint64 get_current_time(void) {
     /* Replace with ctime */
-    return 0;
+    return ctime();
 }
 
 /* Simple example that allocates heap memory and accesses it. */
@@ -30,7 +30,9 @@ void ul_start_func(int a1) {
     /* Execute for a really long period */
     for (int i = 0; i < 10000000; i++) {
         if (i%1000000 == 0) {
+            
             if ((get_current_time() - prev_time) >= 10000) { 
+                //printf("-----%d-----\n",(get_current_time() - prev_time) );
                 ulthread_yield();
                 prev_time = get_current_time();
             }
@@ -61,3 +63,4 @@ main(int argc, char *argv[])
     printf("[*] User-Level Threading Test #5 (PRIO Collaborative) Complete.\n");
     return 0;
 }
+

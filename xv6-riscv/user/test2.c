@@ -34,10 +34,10 @@ main(int argc, char *argv[])
     uint64 args[6] = {0,0,0,0,0,0};
     for (int i = 0; i < 10; i++)
         ulthread_create((uint64) ul_start_func, (uint64) (stacks+((i+1)*PGSIZE)), args, i%10);
-
     /* Schedule all of the threads */
     ulthread_schedule();
 
     printf("[*] User-Level Threading Test #2 (Priority Scheduling) Complete.\n");
     return 0;
 }
+
