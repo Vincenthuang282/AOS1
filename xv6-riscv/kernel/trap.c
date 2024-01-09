@@ -37,7 +37,6 @@ void
 usertrap(void)
 {
   int which_dev = 0;
-
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
@@ -46,11 +45,17 @@ usertrap(void)
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
-  
+  if(p->name[0]=='v'&&p->name[1]=='m'&&p->name[2]=='-'){
+    p->proc_te_vm=1;
+  }
   // save user program counter.
   p->trapframe->epc = r_sepc();
 
   if(r_scause() == 8){
+    if(p->proc_te_vm==1){
+      trap_and_emulate();
+      
+    }
     // system call
     if(killed(p))
       exit(-1);
@@ -64,9 +69,14 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }else if(p->proc_te_vm==1&&r_scause()==2){
+    
+    trap_and_emulate();
+    p->trapframe->epc += 4;
+  } 
+  else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
